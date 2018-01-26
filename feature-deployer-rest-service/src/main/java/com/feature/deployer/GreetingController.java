@@ -1,4 +1,4 @@
-package feature.deployer;
+package com.feature.deployer;
 
 import java.util.concurrent.atomic.AtomicLong;
 import org.springframework.web.bind.annotation.RequestMapping;

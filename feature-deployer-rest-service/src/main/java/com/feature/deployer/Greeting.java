@@ -1,4 +1,4 @@
-package feature.deployer;
+package com.feature.deployer;
 
 public class Greeting {
 

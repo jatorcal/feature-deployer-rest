@@ -1,4 +1,4 @@
-package feature.deployer;
+package com.feature.deployer;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;

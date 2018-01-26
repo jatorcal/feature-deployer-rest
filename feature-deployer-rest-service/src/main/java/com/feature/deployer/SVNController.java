@@ -1,14 +1,15 @@
-package feature.deployer;
+package com.feature.deployer;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.feature.deployer.svn.services.SVNService;
+
 import feature.deployer.resources.svn.SVNResource;
-import feature.deployer.svn.services.SVNService;
 
 @RestController
 public class SVNController {
@@ -17,7 +18,7 @@ public class SVNController {
 	private SVNService svnService;
 
     @RequestMapping(value = "/checkout", produces = {MediaType.APPLICATION_JSON_VALUE}, method = RequestMethod.POST)
-    public void checkout(@RequestParam SVNResource svnResource) {
+    public void checkout(@RequestBody SVNResource svnResource) {
     	svnService.checkout(svnResource);
     }
 }

@@ -46,11 +46,18 @@
 		    <version>2.6</version>
 		</dependency>	
 		
+		<dependency>
+			<groupId>org.apache.httpcomponents</groupId>
+			<artifactId>httpclient</artifactId>
+			<version>4.1.1</version>
+		</dependency>
+				
+		
 		
 		<dependency>
 		    <groupId>feature.deployer</groupId>
 		    <artifactId>feature-deployer-commons</artifactId>
-		    <version>0.0.2-SNAPSHOT</version>
+		    <version>0.0.3-SNAPSHOT</version>
 		</dependency>	
 		
     </dependencies>

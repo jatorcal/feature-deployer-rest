@@ -1,4 +1,4 @@
-package feature.deployer.svn.services;
+package com.feature.deployer.svn.services;
 
 import java.io.File;
 

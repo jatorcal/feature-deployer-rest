@@ -1,4 +1,4 @@
-package feature.deployer.svn.services;
+package com.feature.deployer.mvn.services;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -8,6 +8,8 @@ import java.util.ArrayList;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
 import feature.deployer.resources.mvn.MVNResource;
@@ -20,11 +22,22 @@ public class MVNServiceImpl implements MVNService {
 	private static String BUILD_SUCCESS = "BUILD SUCCESS";
 	private static String BUILD_FAILURE = "BUILD FAILURE";
 
-	public boolean build(MVNResource mvnResource) throws IOException, InterruptedException {
-		return mvnCleanInstallCommand(mvnResource.getMvnProjectPath());
+	/**
+	 * Execute "mvn clean install" on path
+	 * 
+	 * @param {@link MVNResource} mvnResource
+	 * 
+	 * @return ResponseEntity<String>
+	 * 
+	 * @throws IOException
+	 * @throws InterruptedException
+	 */
+	public ResponseEntity<String> build(MVNResource mvnResource) throws IOException, InterruptedException {
+		return mvnCleanInstallCommand(mvnResource.getMvnProjectPath());		
 	}
+	
 
-	private boolean mvnCleanInstallCommand(String repoLocalPath) throws IOException, InterruptedException {
+	private ResponseEntity<String> mvnCleanInstallCommand(String repoLocalPath) throws IOException, InterruptedException {
 		String cmdline = "cd " + repoLocalPath + " && mvn clean install";
 		boolean success = false;
 
@@ -33,7 +46,7 @@ public class MVNServiceImpl implements MVNService {
 		Process process = new ProcessBuilder(new String[] { "bash", "-c", cmdline }).redirectErrorStream(true)
 				.directory(new File(".")).start();
 
-		ArrayList<String> output = new ArrayList();
+		ArrayList<String> output = new ArrayList<String>();
 
 		BufferedReader br = new BufferedReader(new InputStreamReader(process.getInputStream()));
 
@@ -49,11 +62,16 @@ public class MVNServiceImpl implements MVNService {
 		}
 		LOGGER.info("Finish command with result {}", Boolean.valueOf(success));
 		if (0 != process.waitFor()) {
-			return false;
+			success = false;
 		}
+		
+		
+		// Depends on result on command, we return ok or an exception
 		if (!success) {
+			LOGGER.error("Build error. Build success not found. See log for the mvn command resume log");
 			throw new IOException("Build error. Build success not found. See log for the mvn command resume log");
 		}
-		return success;
+		
+		return new ResponseEntity<String>(HttpStatus.OK);
 	}
 }
