@@ -15,5 +15,8 @@ public interface SVNService {
 	 * @throws SVNException
 	 */
 	public void checkout(SVNResource svnResource);
+	
+	
+	public void showHistory(SVNResource svnResource) throws SVNException;
   
 }
