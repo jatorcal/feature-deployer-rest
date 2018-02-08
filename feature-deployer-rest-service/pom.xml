@@ -5,7 +5,7 @@
 
     <groupId>org.springframework</groupId>
     <artifactId>feature-deployer-rest-service</artifactId>
-    <version>0.1.0</version>
+    <version>0.2.0</version>
 
     <parent>
         <groupId>org.springframework.boot</groupId>
@@ -13,6 +13,11 @@
         <version>1.5.9.RELEASE</version>
     </parent>
 
+   <properties>
+        <java.version>1.8</java.version>
+        <feature.deployer.commons>0.3.0-SNAPSHOT</feature.deployer.commons>
+    </properties>
+    
     <dependencies>
         
         <dependency>
@@ -51,21 +56,27 @@
 			<artifactId>httpclient</artifactId>
 			<version>4.1.1</version>
 		</dependency>
-				
+		
+		<!-- https://mvnrepository.com/artifact/mysql/mysql-connector-java -->
+		<dependency>
+		    <groupId>mysql</groupId>
+		    <artifactId>mysql-connector-java</artifactId>
+		</dependency>
+		
+		<!-- https://mvnrepository.com/artifact/org.springframework/spring-jdbc -->
+		<dependency>
+		    <groupId>org.springframework</groupId>
+		    <artifactId>spring-jdbc</artifactId>
+		</dependency>
 		
 		
 		<dependency>
 		    <groupId>feature.deployer</groupId>
 		    <artifactId>feature-deployer-commons</artifactId>
-		    <version>0.0.4-SNAPSHOT</version>
+		    <version>${feature.deployer.commons}</version>
 		</dependency>	
 		
     </dependencies>
-
-    <properties>
-        <java.version>1.8</java.version>
-    </properties>
-
 
     <build>
         <plugins>

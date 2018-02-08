@@ -1,10 +1,14 @@
 package com.feature.deployer.deploy.services;
 
+import java.io.File;
 import java.io.IOException;
 import java.net.URISyntaxException;
+import java.util.List;
+import java.util.StringTokenizer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
@@ -16,7 +20,17 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 
-import feature.deployer.resources.deploy.TomcatAPIResources;
+import com.feature.deployer.command.services.CommandService;
+import com.feature.deployer.npm.services.NPMService;
+import com.feature.persistence.services.BashProcessDAO;
+import com.feature.persistence.services.BashProcessDAOImpl;
+import com.feature.persistence.services.CurrentFrontDeployProcessDAO;
+import com.feature.persistence.services.CurrentFrontDeployProcessDAOImpl;
+
+import feature.deployer.resources.deploy.DeployFrontResource;
+import feature.deployer.resources.deploy.TomcatAPIResource;
+import feature.deployer.resources.mysql.BashProcessResource;
+import feature.deployer.resources.mysql.CurrentFrontDeployResource;
 
 @Service("deployService")
 public class DeployServiceImpl implements DeployService {
@@ -24,12 +38,18 @@ public class DeployServiceImpl implements DeployService {
 	private static final Logger LOGGER = LoggerFactory.getLogger(DeployServiceImpl.class);
 
 	private String TOMCAT_SERVICE_RESPONSE_FAIL = "FALLO";	
+	
+	@Autowired
+	private NPMService npmService;
+	
+	@Autowired
+	private CommandService commandService;
 
 
 	/**
 	 * Deploy war on tomcat
 	 * 
-	 * @param {@link TomcatAPIResources} tomcatAPIResources
+	 * @param {@link TomcatAPIResource} tomcatAPIResources
 	 * 
 	 * @return ResponseEntity<String>
 	 * 
@@ -38,7 +58,7 @@ public class DeployServiceImpl implements DeployService {
 	 */
 	@SuppressWarnings("rawtypes")
 	@Override
-	public ResponseEntity<String> tomcatDeploy(TomcatAPIResources tomcatAPIResources) throws IOException, InterruptedException, URISyntaxException {
+	public ResponseEntity<String> tomcatDeploy(TomcatAPIResource tomcatAPIResources) throws IOException, InterruptedException, URISyntaxException {
 
 		// REST TEMPLATE
 		RestTemplate restTemplate = new RestTemplate();
@@ -63,10 +83,64 @@ public class DeployServiceImpl implements DeployService {
 		return new ResponseEntity<>(HttpStatus.OK);		
 	}
 	
+	
+
+	/**
+	 * Check if context is deploy on tomcat yet
+	 * 
+	 * @param {@link TomcatAPIResource} tomcatAPIResources
+	 * 
+	 * @return ResponseEntity<String>
+	 * 
+	 * @throws IOException - Returns response body in case of error
+	 * @throws InterruptedException, URISyntaxException
+	 */
+	@SuppressWarnings("rawtypes")
+	@Override
+	public ResponseEntity<String> tomcatCheckDeploy(TomcatAPIResource tomcatAPIResources) throws IOException, InterruptedException, URISyntaxException {
+
+		// REST TEMPLATE
+		RestTemplate restTemplate = new RestTemplate();
+		
+		restTemplate.getInterceptors().add(
+				  new BasicAuthorizationInterceptor(tomcatAPIResources.getUser(), tomcatAPIResources.getPassword()));
+		
+		// Definimos los headers
+		MultiValueMap<String, String> headers = new LinkedMultiValueMap<>();
+		headers.add("Content-Type", MediaType.APPLICATION_JSON_VALUE);
+		
+		// Creamos el request con el objeto
+		HttpEntity requestEntity = new HttpEntity<>(headers);
+		
+		// Creamos el request con el objeto		
+		ResponseEntity<String> response = restTemplate.exchange(getURITomcatCheckDeploy(tomcatAPIResources), HttpMethod.GET, requestEntity, String.class);
+		
+		String listAppDeploy = response.getBody();
+		StringTokenizer tokenizer = new StringTokenizer(listAppDeploy, "\n");
+		while (tokenizer.hasMoreTokens()) {
+			String token = tokenizer.nextToken();			
+			StringTokenizer tokenizer2 = new StringTokenizer(token, ":");
+			int counter = 1;
+			while (tokenizer2.hasMoreTokens()) {
+				String token2 = tokenizer2.nextToken();
+				if (counter==4) {
+					if (token2.equals(tomcatAPIResources.getContext())) {
+						throw new IOException ("war.deploy.exists");
+					}
+				}
+				counter++;
+			}
+			
+		}
+		
+		return new ResponseEntity<>(HttpStatus.OK);		
+	}
+	
+	
 	/**
 	 * Undeploy context on tomcat
 	 * 
-	 * @param {@link TomcatAPIResources} tomcatAPIResources
+	 * @param {@link TomcatAPIResource} tomcatAPIResources
 	 * 
 	 * @return ResponseEntity<String>
 	 * 
@@ -74,7 +148,7 @@ public class DeployServiceImpl implements DeployService {
 	 * @throws InterruptedException, URISyntaxException
 	 */
 	@Override
-	public ResponseEntity<String> tomcatUndeploy(TomcatAPIResources tomcatAPIResources) throws IOException, InterruptedException, URISyntaxException {
+	public ResponseEntity<String> tomcatUndeploy(TomcatAPIResource tomcatAPIResources) throws IOException, InterruptedException, URISyntaxException {
 
 		
 		// REST TEMPLATE
@@ -103,6 +177,113 @@ public class DeployServiceImpl implements DeployService {
 			
 		return new ResponseEntity<>(HttpStatus.OK);		
 	}
+		
+
+	/**
+	 * Deploy front
+	 * 
+	 * @param {@link DeployFrontResource} deployFrontResource
+	 * 
+	 * @return ResponseEntity<String>
+	 * 
+	 * @throws IOException - Returns response body in case of error
+	 * @throws InterruptedException, URISyntaxException
+	 * @throws IllegalAccessException 
+	 * @throws IllegalArgumentException 
+	 * @throws SecurityException 
+	 * @throws NoSuchFieldException 
+	 */
+	@Override
+	public ResponseEntity<String> frontDeploy(DeployFrontResource deployFrontResource)
+			throws IOException, InterruptedException, URISyntaxException, NoSuchFieldException, SecurityException, IllegalArgumentException, IllegalAccessException {
+		
+		// editamos server.js
+		npmService.editServerJs(deployFrontResource.getProjectsSourceCodePath(), deployFrontResource.getServerJsParameters());
+		
+		/** BUILD **/
+		// npm install
+		npmService.npmInstall(deployFrontResource.getProjectsSourceCodePath());
+		
+		// gulp build
+		npmService.gulpBuild(deployFrontResource.getProjectsSourceCodePath());
+		
+		/** DEPLOY **/
+		// npm start dev
+		npmService.npmStartDev(deployFrontResource);
+		
+		return null;
+	}
+	
+	
+	/**
+	 * Undeploy front
+	 * 
+	 * @param {@link DeployFrontResource} deployFrontResource
+	 * 
+	 * @return ResponseEntity<String>
+	 * 
+	 * @throws IOException - Returns response body in case of error
+	 * @throws InterruptedException, URISyntaxException
+	 */
+	@Override
+	public ResponseEntity<String> frontUndeploy(DeployFrontResource deployFrontResource)
+			throws IOException, InterruptedException, URISyntaxException, NoSuchFieldException, SecurityException,
+			IllegalArgumentException, IllegalAccessException {
+		
+		
+		CurrentFrontDeployResource currentFrontDeployResource = checkDeploy(deployFrontResource);
+		
+		
+		BashProcessDAO bashProcessDAO = new BashProcessDAOImpl();
+		List<BashProcessResource> listBashProcessResource = bashProcessDAO.id(currentFrontDeployResource.getPidBashProcess());
+		
+		for (BashProcessResource bashProcessResource : listBashProcessResource) {
+			
+			String cmdLinePid = new StringBuilder()
+					.append("kill -9 ")
+					.append(bashProcessResource.getPid())
+					.toString();
+			
+			commandService.bufferedReaderLinesForCommandLine(cmdLinePid);
+			
+			
+			
+			String cmdLinePidAssociated = new StringBuilder()
+					.append("kill -9 ")
+					.append(bashProcessResource.getAssociatedPid())
+					.toString();
+			
+			commandService.bufferedReaderLinesForCommandLine(cmdLinePidAssociated);
+			
+		}
+		
+		CurrentFrontDeployProcessDAO currentFrontDeployProcessDAO = new CurrentFrontDeployProcessDAOImpl();
+		currentFrontDeployProcessDAO.delete(deployFrontResource.getFrontProject().getProjectName());
+		
+		return new ResponseEntity<>(HttpStatus.OK);
+	}
+	
+
+	
+	/**
+	 * Check existing deploy front
+	 * 
+	 * @param {@link DeployFrontResource} deployFrontResource
+	 * 
+	 * @return ResponseEntity<String>
+	 * 
+	 * @throws IOException - Returns response body in case of error
+	 * @throws InterruptedException, URISyntaxException
+	 */
+	@Override
+	public CurrentFrontDeployResource checkDeploy(DeployFrontResource deployFrontResource)
+			throws IOException, InterruptedException, URISyntaxException, NoSuchFieldException, SecurityException,
+			IllegalArgumentException, IllegalAccessException {
+
+		CurrentFrontDeployProcessDAO currentFrontDeployProcessDAO = new CurrentFrontDeployProcessDAOImpl();
+		CurrentFrontDeployResource currentFrontDeployResource = currentFrontDeployProcessDAO.currentprojectName(deployFrontResource.getFrontProject().getProjectName());		
+		return currentFrontDeployResource;
+	}
 	
 	
 	/**
@@ -111,13 +292,13 @@ public class DeployServiceImpl implements DeployService {
 	 *  
 	 * Example: http://user:user@localhost:8080/manager/text/deploy?path=/example&war=file:/home/example.war
 	 * 
-	 * @param {@link TomcatAPIResources}
+	 * @param {@link TomcatAPIResource}
 	 * 
 	 * @return String
 	 * 
 	 * @throws URISyntaxException
 	 */
-	private String getURITomcatDeploy(TomcatAPIResources tomcatAPIResources){
+	private String getURITomcatDeploy(TomcatAPIResource tomcatAPIResources){
 		String uri = new StringBuilder("http://")
 			.append(tomcatAPIResources.getUser())
 			.append(":")
@@ -128,8 +309,34 @@ public class DeployServiceImpl implements DeployService {
 			.append(tomcatAPIResources.getPort())
 			.append("/manager/text/deploy?path=")
 			.append(tomcatAPIResources.getContext())
-			.append("&war=file>")
+			.append("&war=file:")
 			.append(tomcatAPIResources.getWarPath()).toString();
+		
+		return uri;
+	}
+	
+	/**
+	 * Returns uri for rest service tomcat list.
+	 * This rest service has a GET verb.
+	 *  
+	 * Example: http://user:user@http://localhost:8081/manager/text/list
+	 * 
+	 * @param {@link TomcatAPIResource}
+	 * 
+	 * @return String
+	 * 
+	 * @throws URISyntaxException
+	 */
+	private String getURITomcatCheckDeploy(TomcatAPIResource tomcatAPIResources){
+		String uri = new StringBuilder("http://")
+			.append(tomcatAPIResources.getUser())
+			.append(":")
+			.append(tomcatAPIResources.getPassword())
+			.append("@")
+			.append(tomcatAPIResources.getHost())
+			.append(":")
+			.append(tomcatAPIResources.getPort())
+			.append("/manager/text/list").toString();
 		
 		return uri;
 	}
@@ -141,13 +348,13 @@ public class DeployServiceImpl implements DeployService {
 	 *  
 	 * Example: http://user:user@localhost:8080/manager/text/undeploy?path=/example
 	 * 
-	 * @param {@link TomcatAPIResources}
+	 * @param {@link TomcatAPIResource}
 	 * 
 	 * @return String
 	 * 
 	 * @throws URISyntaxException
 	 */
-	private String getURITomcatUndeploy(TomcatAPIResources tomcatAPIResources) throws URISyntaxException {
+	private String getURITomcatUndeploy(TomcatAPIResource tomcatAPIResources) throws URISyntaxException {
 		String uri = new StringBuilder("http://")
 			.append(tomcatAPIResources.getUser())
 			.append(":")
